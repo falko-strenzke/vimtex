@@ -44,8 +44,8 @@ function! vimtex#parser#auxiliary#labels() abort " {{{1
     let l:current = l:cache.get(l:file)
     let l:ftime = getftime(l:file)
     if l:ftime > l:current.ftime
-      let l:current.ftime = l:ftime
       let l:current.labels = s:parse_labels(l:file, l:prefix)
+      let l:current.ftime = l:ftime
       let l:cache.modified = 1
     endif
 

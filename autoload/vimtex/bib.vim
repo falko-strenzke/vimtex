@@ -78,7 +78,6 @@ function! s:files_manual() abort " {{{1
     let l:ftime = getftime(l:file)
     if l:ftime > l:current.ftime
       let l:cache.modified = 1
-      let l:current.ftime = l:ftime
       let l:current.files = []
 
       for l:entry in map(
@@ -107,6 +106,7 @@ function! s:files_manual() abort " {{{1
 
         let l:current.files += l:files
       endfor
+      let l:current.ftime = l:ftime
     endif
 
     let l:bibfiles += l:current.files

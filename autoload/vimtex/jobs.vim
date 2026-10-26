@@ -58,8 +58,11 @@ function! vimtex#jobs#capture(cmd, ...) abort " {{{1
   let l:opts = a:0 > 0 ? a:1 : {}
 
   call vimtex#paths#pushd(get(l:opts, 'cwd', ''))
-  let l:output = vimtex#jobs#{s:backend}#capture(a:cmd)
-  call vimtex#paths#popd()
+  try
+    let l:output = vimtex#jobs#{s:backend}#capture(a:cmd)
+  finally
+    call vimtex#paths#popd()
+  endtry
 
   " On Windows there may be trailing CR characters
   return vimtex#util#is_win()

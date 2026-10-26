@@ -53,9 +53,10 @@ function! vimtex#complete#omnifunc(findstart, base) abort " {{{1
     return []
   endif
 
+  let l:candidates = s:complete(a:base)
   return g:vimtex_complete_close_braces && get(s:completer, 'inside_braces', 1)
-        \ ? s:close_braces(s:completer.complete(a:base))
-        \ : s:completer.complete(a:base)
+        \ ? s:close_braces(l:candidates)
+        \ : l:candidates
 endfunction
 
 " }}}1
@@ -63,9 +64,21 @@ function! vimtex#complete#complete(type, input, context) abort " {{{1
   try
     let s:completer = s:completer_{a:type}
     let s:completer.context = a:context
-    return s:completer.complete(a:input)
+    return s:complete(a:input)
   catch /E121/
     return []
+  endtry
+endfunction
+
+" }}}1
+function! s:complete(base) abort " {{{1
+  let l:pos = getpos('.')
+  try
+    return s:completer.complete(a:base)
+  catch /^Vim:Interrupt$/
+    return []
+  finally
+    call setpos('.', l:pos)
   endtry
 endfunction
 
@@ -128,20 +141,22 @@ function! s:completer_bib.gather_candidates() dict abort " {{{2
 
   " Note: bibtex seems to require that we are in the project root
   call vimtex#paths#pushd(b:vimtex.root)
-  for l:file in vimtex#bib#files()
-    let l:current = l:cache.get(l:file)
-    let l:ftime = getftime(l:file)
-    if l:ftime > l:current.ftime
-      let l:current.ftime = l:ftime
-      let l:current.result = map(
-            \ vimtex#parser#bib(l:file),
-            \ {_, x -> s:bib_to_candidate(x)})
-      let l:cache.modified = 1
-    endif
-    let l:entries += l:current.result
-  endfor
-
-  call vimtex#paths#popd()
+  try
+    for l:file in vimtex#bib#files()
+      let l:current = l:cache.get(l:file)
+      let l:ftime = getftime(l:file)
+      if l:ftime > l:current.ftime
+        let l:current.result = map(
+              \ vimtex#parser#bib(l:file),
+              \ {_, x -> s:bib_to_candidate(x)})
+        let l:current.ftime = l:ftime
+        let l:cache.modified = 1
+      endif
+      let l:entries += l:current.result
+    endfor
+  finally
+    call vimtex#paths#popd()
+  endtry
 
   "
   " Find data from 'thebibliography' environments
@@ -151,7 +166,6 @@ function! s:completer_bib.gather_candidates() dict abort " {{{2
     let l:current = l:cache.get(sha256(b:vimtex.tex))
 
     if l:ftime > l:current.ftime
-      let l:current.ftime = l:ftime
       let l:current.result = []
 
       let l:lines = vimtex#parser#tex(b:vimtex.tex, {'detailed' : 0})
@@ -171,6 +185,7 @@ function! s:completer_bib.gather_candidates() dict abort " {{{2
           endif
         endfor
       endif
+      let l:current.ftime = l:ftime
     endif
 
     let l:entries += l:current.result
@@ -700,28 +715,29 @@ function! s:get_packages() abort " {{{1
         \  ] + keys(b:vimtex.packages)
 
   call vimtex#paths#pushd(s:complete_dir)
+  try
+    let l:missing = filter(copy(l:packages), '!filereadable(v:val)')
+    call filter(l:packages, 'filereadable(v:val)')
 
-  let l:missing = filter(copy(l:packages), '!filereadable(v:val)')
-  call filter(l:packages, 'filereadable(v:val)')
+    " Parse include statements in complete files
+    let l:queue = copy(l:packages)
+    while !empty(l:queue)
+      let l:current = remove(l:queue, 0)
+      let l:includes = filter(readfile(l:current), 'v:val =~# ''^\#\s*include:''')
+      if empty(l:includes) | continue | endif
 
-  " Parse include statements in complete files
-  let l:queue = copy(l:packages)
-  while !empty(l:queue)
-    let l:current = remove(l:queue, 0)
-    let l:includes = filter(readfile(l:current), 'v:val =~# ''^\#\s*include:''')
-    if empty(l:includes) | continue | endif
+      call map(l:includes, {_, x -> matchstr(x, 'include:\s*\zs.*\ze\s*$')})
+      let l:missing += filter(copy(l:includes),
+            \ {_, x -> !filereadable(x) && index(l:missing, x) < 0})
+      call filter(l:includes,
+            \ {_, x -> filereadable(x) && index(l:packages, x) < 0})
 
-    call map(l:includes, {_, x -> matchstr(x, 'include:\s*\zs.*\ze\s*$')})
-    let l:missing += filter(copy(l:includes),
-          \ {_, x -> !filereadable(x) && index(l:missing, x) < 0})
-    call filter(l:includes,
-          \ {_, x -> filereadable(x) && index(l:packages, x) < 0})
-
-    let l:packages += l:includes
-    let l:queue += l:includes
-  endwhile
-
-  call vimtex#paths#popd()
+      let l:packages += l:includes
+      let l:queue += l:includes
+    endwhile
+  finally
+    call vimtex#paths#popd()
+  endtry
 
   return l:packages + l:missing
 endfunction
@@ -752,9 +768,9 @@ function! s:load_from_package(pkg, type) abort " {{{1
     let l:ftime = getftime(l:filename)
     if l:ftime > get(l:current, 'ftime', -1)
       let s:pkg_cache.modified = 1
-      let l:current.ftime = l:ftime
       let l:current.candidates = s:_load_candidates_from_source(
             \ readfile(l:filename), a:pkg)
+      let l:current.ftime = l:ftime
     endif
   endif
 
@@ -774,10 +790,10 @@ function! s:load_from_document(type) abort " {{{1
 
   let l:current = s:pkg_cache.get(sha256(b:vimtex.tex))
   if l:ftime > get(l:current, 'ftime', -1)
-    let l:current.ftime = l:ftime
     let l:current.candidates = s:_load_candidates_from_source(
         \ vimtex#parser#tex(b:vimtex.tex, {'detailed' : 0}),
         \ 'local')
+    let l:current.ftime = l:ftime
 
     " Write cache to file
     let s:pkg_cache.modified = 1

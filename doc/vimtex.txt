@@ -4507,6 +4507,11 @@ accessible with |i_CTRL-X_CTRL-O|. If desired, one may set
 |g:vimtex_complete_close_braces|, which makes the completion include closing
 braces.
 
+Press CTRL-C to interrupt VimTeX's completion scan, including recursive scans of
+included files. This is useful when |i_CTRL-E| does not respond while candidates
+are being gathered. The interrupted completion returns no matches; completion
+can be started again normally.
+
 The omni completion completes citations, labels, glossary entries and
 filenames. The following sections document the various kinds of completions
 provided by VimTeX's completion function.

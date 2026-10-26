@@ -54,8 +54,8 @@ function! vimtex#parser#tex#parse_preamble(file, opts) abort " {{{1
 
   let l:time = min([localtime() - 60, getftime(a:file)])
   if l:time > l:current.time
-    let l:current.time = l:time
     let l:current.lines = s:parse_preamble(a:file, l:opts.root, [])
+    let l:current.time = l:time
   endif
 
   return deepcopy(l:current.lines)
@@ -183,8 +183,8 @@ function! s:parse(file, root, cache) abort " {{{1
   let l:current = a:cache.get(a:file)
   let l:ftime = getftime(a:file)
   if l:ftime > l:current.ftime
-    let l:current.ftime = l:ftime
     call s:parse_current(a:file, a:root, l:current)
+    let l:current.ftime = l:ftime
   endif
 
   let l:parsed = []
@@ -205,8 +205,8 @@ function! s:parse_files(file, root, cache) abort " {{{1
   let l:current = a:cache.get(a:file)
   let l:ftime = getftime(a:file)
   if l:ftime > l:current.ftime
-    let l:current.ftime = l:ftime
     call s:parse_current(a:file, a:root, l:current)
+    let l:current.ftime = l:ftime
   endif
 
   " Only include existing files
